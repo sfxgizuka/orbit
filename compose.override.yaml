@@ -1,0 +1,66 @@
+# Development environment override
+services:
+  php:
+    build:
+      context: ./api
+      target: frankenphp_dev
+    volumes:
+      - ./api:/app
+      - /app/var
+      - ./api/frankenphp/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./api/frankenphp/conf.d/app.dev.ini:/usr/local/etc/php/conf.d/app.dev.ini:ro
+      # If you develop on Mac or Windows you can remove the vendor/ directory
+      #  from the bind-mount for better performance by enabling the next line:
+      #- /app/vendor
+    environment:
+      MERCURE_EXTRA_DIRECTIVES: demo
+      # See https://xdebug.org/docs/all_settings#mode
+      XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+    extra_hosts:
+      # Ensure that host.docker.internal is correctly defined on Linux
+      - host.docker.internal:host-gateway
+    tty: true
+
+  pwa:
+    build:
+      context: ./pwa
+      target: dev
+    volumes:
+      - ./pwa:/srv/app
+    environment:
+      API_PLATFORM_CREATE_CLIENT_ENTRYPOINT: http://php
+      API_PLATFORM_CREATE_CLIENT_OUTPUT: .
+      # On Linux, you may want to comment the following line for improved performance
+      WATCHPACK_POLLING: "true"
+      # Development usage only
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+
+###> doctrine/doctrine-bundle ###
+  database:
+    ports:
+      - target: 5432
+        published: 5432
+        protocol: tcp
+###< doctrine/doctrine-bundle ###
+
+###> symfony/mercure-bundle ###
+###< symfony/mercure-bundle ###
+
+  keycloak:
+    build:
+      context: ./helm/api-platform/keycloak/
+      target: keycloak
+    volumes:
+      - ./helm/api-platform/keycloak/themes/api-platform-demo:/opt/bitnami/keycloak/themes/api-platform-demo
+
+  keycloak-config-cli:
+    image: bitnami/keycloak-config-cli:5-debian-12
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080/oidc/
+      KEYCLOAK_USER: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-!ChangeMe!}
+      KEYCLOAK_AVAILABILITYCHECK_ENABLED: "true"
+      KEYCLOAK_AVAILABILITYCHECK_TIMEOUT: 120s
+      IMPORT_FILES_LOCATIONS: "/config/*"
+    volumes:
+      - ./helm/api-platform/keycloak/config:/config

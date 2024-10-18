@@ -1,0 +1,274 @@
+# Default values for api-platform.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+php:
+  image:
+    repository: "chart-example.local/api-platform/php"
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: ""
+  appEnv: prod
+  appDebug: "0"
+  appSecret: ""
+  corsAllowOrigin: "^https?://.*?\\.chart-example\\.local$"
+  oidcClientId: api-platform-api
+  trustedHosts: "^127\\.0\\.0\\.1|localhost|.*\\.chart-example\\.local$"
+  trustedProxies:
+    - "127.0.0.1"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  caddyGlobalOptions: |
+    debug
+    servers {
+      metrics
+      trusted_proxies static private_ranges
+    }
+#    order cache before rewrite
+#    cache {
+#        api {
+#            souin
+#        }
+#    }
+  resources:
+    requests:
+      memory: 100Mi
+      cpu: 50m
+    limits:
+      memory: 300Mi
+
+pwa:
+  image:
+    repository: "chart-example.local/api-platform/pwa"
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: ""
+  appSecret: ""
+  oidcClientId: api-platform-pwa
+  resources:
+    requests:
+      memory: 300Mi
+      cpu: 50m
+    limits:
+      memory: 300Mi
+
+# You may prefer using the managed version in production: https://mercure.rocks
+mercure:
+  publicUrl: https://chart-example.local/.well-known/mercure
+  # Change me!
+  jwtSecret: "!ChangeThisMercureHubJWTSecretKey!"
+  extraDirectives: |
+    demo
+    cors_origins http://chart-example.local https://chart-example.local
+
+# Full configuration: https://github.com/bitnami/charts/tree/master/bitnami/postgresql
+postgresql:
+  enabled: true
+  # If bringing your own PostgreSQL, the full uri to use
+  #url: postgresql://api-platform:!ChangeMe!@database:5432/api?serverVersion=13&charset=utf8
+  global:
+    postgresql:
+      auth:
+        postgresPassword: "!ThisMustBeChanged!"
+        username: "example"
+        password: "!ChangeMe!"
+        database: "api"
+  # Persistent Volume Storage configuration.
+  # ref: https://kubernetes.io/docs/user-guide/persistent-volumes
+  primary:
+    persistence:
+      enabled: true
+      storageClass: standard
+      size: 1Gi
+    pullPolicy: Always
+    image:
+      repository: bitnami/postgresql
+      tag: 16
+    resources:
+      requests:
+        memory: 50Mi
+        cpu: 1m
+
+# Full configuration: https://github.com/bitnami/charts/tree/master/bitnami/keycloak
+keycloak:
+  enabled: true
+  image:
+    registry: europe-west1-docker.pkg.dev
+    repository: "chart-example.local/api-platform/keycloak"
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "0.1.0"
+  resources:
+    requests:
+      memory: 400Mi
+      cpu: 50m
+    limits:
+      memory: 500Mi
+  service:
+    type: ClusterIP
+  extraEnvVars:
+    # Must set KC_HOSTNAME_URL to force https + relative path
+    - name: KC_HOSTNAME_URL
+      value: "https://chart-example.local/oidc/"
+    # Must set KC_HOSTNAME_ADMIN because of relative path
+    - name: KC_HOSTNAME_ADMIN_URL
+      value: "https://chart-example.local/oidc/"
+    - name: KEYCLOAK_PRODUCTION
+      value: "true"
+  # must finish with a trailing slash (https://github.com/bitnami/charts/issues/10885#issuecomment-1414279144)
+  httpRelativePath: /oidc/
+  proxy: edge
+  tls:
+    enabled: false
+  startupProbe:
+    enabled: true
+  readinessProbe:
+    initialDelaySeconds: 0
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+  keycloakConfigCli:
+    enabled: true
+    existingConfigmap: "keycloak-realm"
+    # https://github.com/bitnami/charts/issues/14279
+    command:
+      - java
+      - -jar
+      - /opt/bitnami/keycloak-config-cli/keycloak-config-cli.jar
+    image:
+      tag: 5-debian-12
+  postgresql:
+    enabled: true
+    nameOverride: postgresql-keycloak
+    global:
+      postgresql:
+        auth:
+          postgresPassword: "!ThisMustBeChanged!"
+          password: "!ChangeMe!"
+    primary:
+      persistence:
+        enabled: true
+        storageClass: standard
+        size: 1Gi
+      pullPolicy: Always
+      image:
+        repository: bitnami/postgresql
+        tag: 16
+      resources:
+        requests:
+          memory: 50Mi
+          cpu: 1m
+  auth:
+    createAdminUser: true
+    adminUser: admin
+    adminPassword: "!ChangeMe!"
+
+external-dns:
+  enabled: true
+  resources:
+    requests:
+      memory: 50Mi
+      cpu: 1m
+    limits:
+      memory: 200Mi
+      cpu: 100m
+  domainFilters:
+    - chart-example.local
+  provider: cloudflare
+  cloudflare:
+    apiToken: ""
+  zoneIdFilters: []
+  rbac:
+    create: true
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # keycloak send too big headers, require bigger buffer size
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      oidcpaths:
+        - path: /oidc/
+          pathType: Prefix
+          #backend:
+          #  service:
+          #    name: main-keycloak
+          #    port:
+          #      number: 80
+      paths:
+        - path: /
+          pathType: Prefix
+          #backend:
+          #  service:
+          #    name: main-api-platform
+          #    port:
+          #      number: 80
+  tls:
+    - #secretName: chart-example-tls
+      hosts:
+        - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# If you use Mercure, you need the managed or the On Premise version to deploy more than one pod: https://mercure.rocks/docs/hub/cluster
+replicaCount: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 50
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "api-platform.fullname" . }}
+  labels:
+    {{- include "api-platform.labels" . | nindent 4 }}
+data:
+  php-app-env: {{ .Values.php.appEnv | quote }}
+  php-app-debug: {{ .Values.php.appDebug | quote }}
+  php-cors-allow-origin: {{ .Values.php.corsAllowOrigin | quote }}
+  php-trusted-hosts: {{ .Values.php.trustedHosts | quote }}
+  php-trusted-proxies: "{{ join "," .Values.php.trustedProxies }}"
+  mercure-url: "http://{{ include "api-platform.fullname" . }}/.well-known/mercure"
+  mercure-public-url: {{ .Values.mercure.publicUrl | default "http://127.0.0.1/.well-known/mercure" | quote }}
+  mercure-extra-directives: {{ .Values.mercure.extraDirectives | quote }}
+  caddy-global-options: {{ .Values.php.caddyGlobalOptions | quote }}
+  oidc-server-url: "https://{{ (first .Values.ingress.hosts).host }}/oidc/realms/demo"
+  oidc-server-url-internal: "http://{{ template "common.names.fullname" .Subcharts.keycloak }}/oidc/realms/demo"
+  next-auth-url: "https://{{ (first .Values.ingress.hosts).host }}/api/auth"
+  pwa-client-id: {{ .Values.pwa.oidcClientId | quote }}
+  pwa-authorization-client-id: {{ .Values.php.oidcClientId | quote }}
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+data:
+{{ (.Files.Glob "keycloak/config/*").AsConfig | indent 2 }}

@@ -1,0 +1,41 @@
+# Production environment override
+services:
+  php:
+    image: ${PHP_DOCKER_IMAGE}
+    build:
+      context: ./api
+      target: frankenphp_prod
+    environment:
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET}
+      MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+      MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
+
+  pwa:
+    image: ${PWA_DOCKER_IMAGE}
+    build:
+      context: ./pwa
+      target: prod
+      args:
+        AUTH_SECRET: ${AUTH_SECRET}
+        # https://nextjs.org/docs/app/building-your-application/configuring/environment-variables#bundling-environment-variables-for-the-browser
+        NEXT_PUBLIC_OIDC_SERVER_URL: ${NEXT_PUBLIC_OIDC_SERVER_URL}
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET}
+
+  database:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  keycloak-database:
+    environment:
+      POSTGRES_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
+
+  keycloak:
+    image: ${KEYCLOAK_DOCKER_IMAGE}
+    build:
+      context: ./helm/api-platform/keycloak/
+      target: keycloak
+    environment:
+      KEYCLOAK_PRODUCTION: "true"
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
